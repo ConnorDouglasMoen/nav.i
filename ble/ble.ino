@@ -1,8 +1,3 @@
-/*
-    Based on Neil Kolban example for IDF: https://github.com/nkolban/esp32-snippets/blob/master/cpp_utils/tests/BLE%20Tests/SampleWrite.cpp
-    Ported to Arduino ESP32 by Evandro Copercini
-*/
-
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
@@ -13,19 +8,25 @@
 VL53L1X sensor;
 
 int dist = 0;
+bool deviceConnected = false;
 
-// See the following for generating UUIDs:
-// https://www.uuidgenerator.net/
+#define SERVICE_UUID        "76850745-6cd8-40c0-baa7-58465de27e5b"
+#define CHARACTERISTIC_UUID "9b5a0e0f-5812-4ece-bef7-47be894bfafe"
 
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-
-
-class MyCallbacks: public BLECharacteristicCallbacks {
+class ServerCallbacks: public BLECharacteristicCallbacks {
     void onRead(BLECharacteristic *pCharacteristic) {
       pCharacteristic -> setValue(dist); 
-      }
+    }
+
+    void onConnect(BLEServer* pServer) {
+      deviceConnected = true;
+      BLEDevice::startAdvertising();
     };
+
+    void onDisconnect(BLEServer* pServer) {
+      deviceConnected = false;
+    }
+};
 
 void setup() {
   Serial.begin(115200);
@@ -34,45 +35,46 @@ void setup() {
   Wire.setClock(400000); // use 400 kHz I2C
 
   sensor.setTimeout(500);
-  if (!sensor.init())
-  {
+  if (!sensor.init()) {
     Serial.println("Failed to detect and initialize sensor!");
     while (1);
   }
-  // Use long distance mode and allow up to 50000 us (50 ms) for a measurement.
-  // You can change these settings to adjust the performance of the sensor, but
-  // the minimum timing budget is 20 ms for short distance mode and 33 ms for
-  // medium and long distance modes. See the VL53L1X datasheet for more
-  // information on range and timing limits.
+  
   sensor.setDistanceMode(VL53L1X::Long);
   sensor.setMeasurementTimingBudget(50000);
 
-  // Start continuous readings at a rate of one measurement every 50 ms (the
-  // inter-measurement period). This period should be at least as long as the
-  // timing budget.
+  // Start continuous readings at a rate of one measurement every 50 ms
+  // This period should be at least as long as the timing budget
   sensor.startContinuous(50);
 
-  
-  BLEDevice::init("Nav.i Server");
+//  Bluetooth setup
+  BLEDevice::init("Navi");
   BLEServer *pServer = BLEDevice::createServer();
-
   BLEService *pService = pServer->createService(SERVICE_UUID);
-
-  BLECharacteristic *pCharacteristic = pService->createCharacteristic(
-                                         CHARACTERISTIC_UUID,
-                                         BLECharacteristic::PROPERTY_READ
-                                       );
-
-  pCharacteristic->setCallbacks(new MyCallbacks());
-
+  BLECharacteristic *pCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_WRITE  |
+                      BLECharacteristic::PROPERTY_NOTIFY |
+                      BLECharacteristic::PROPERTY_INDICATE);
+                      
+  pCharacteristic->setCallbacks(new ServerCallbacks());
   pCharacteristic->setValue("Nav.i Time of Flight");
   pService->start();
 
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
-  pAdvertising->start();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(false);
+//  pAdvertising->start();
+  BLEDevice::startAdvertising();
+  Serial.println("Waiting a Nav.i Client to connect");
 }
 
 void loop() {
+    // notify changed value
+   if (deviceConnected) {
+        Serial.println("Device connected");
+   }
   dist = sensor.read();
 
   Serial.print(sensor.read());
