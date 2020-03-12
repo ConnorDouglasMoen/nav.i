@@ -6,6 +6,10 @@
  */
 
 #include "BLEDevice.h"
+#include <SPI.h>
+#include <analogWrite.h> 
+int haptic_left = 14;
+int haptic_right = 22;
 //#include "BLEScan.h"
 
 // The remote service we wish to connect to.
@@ -34,6 +38,7 @@ static void notifyCallback(
 
 class MyClientCallback : public BLEClientCallbacks {
   void onConnect(BLEClient* pclient) {
+    Serial.println("Connected");
   }
 
   void onDisconnect(BLEClient* pclient) {
@@ -117,8 +122,11 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   Serial.println("Starting Arduino BLE Client application...");
+  pinMode(haptic_left, OUTPUT);
+  pinMode(haptic_right, OUTPUT); 
+  
   BLEDevice::init("");
 
   // Retrieve a Scanner and set the callback we want to use to be informed when we
@@ -152,6 +160,10 @@ void loop() {
   // with the current time since boot.
   if (connected) {
       uint32_t value = pRemoteCharacteristic->readUInt32();
+      if (value > 1000) value = 1000;
+      value = map(value, 0, 1000, 0, 255);
+      analogWrite(haptic_left, value);
+      analogWrite(haptic_right, value);
       Serial.print("The characteristic value was: ");
       Serial.println(value);
   }else if(doScan){
