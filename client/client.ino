@@ -159,9 +159,12 @@ void loop() {
   // If we are connected to a peer BLE Server, update the characteristic each time we are reached
   // with the current time since boot.
   if (connected) {
+      // Map Sensor Input to PWM
       uint32_t value = pRemoteCharacteristic->readUInt32();
       if (value > 1000) value = 1000;
       value = map(value, 0, 1000, 0, 255);
+      value = 255 - value;
+      
       analogWrite(haptic_left, value);
       analogWrite(haptic_right, value);
       Serial.print("The characteristic value was: ");
